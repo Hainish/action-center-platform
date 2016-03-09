@@ -344,6 +344,9 @@ When(/^I click the button to lookup my reps$/) do
     sleep 0.5 while !page.has_content? "Your Representatives"
   end
 
+end
+
+Then(/^I see my reps$/) do
   expect(first(:link, "Tweet @NancyPelosi")).to be_truthy
 end
 
@@ -352,6 +355,60 @@ Given(/^my test env has Internet access and I have an S(\d+) key$/) do |arg1|
   pending if this_machine_offline? or ENV['amazon_access_key_id'].nil?
 end
 
+Given(/^A call campaign targeting a person exists$/) do
+  setup_action
+  @call_campaign = FactoryGirl.create(:call_campaign)
+
+  @action_page = @call_campaign.action_page
+  @action_page.update_attributes(title: @action_info[:title],
+    summary: @action_info[:summary],
+    description: @action_info[:description])
+end
+
+
+When(/^I browse to the call action page$/) do
+  RSpec::Mocks.with_temporary_scope do
+    stub_call_required_fields
+
+    visit "/action/#{@action_page.title.downcase.gsub(" ", "-")}"
+    sleep 0.5 while !first(:input, "#inputPhone")
+
+    expect(first(:input, "#inputPhone")).to be_truthy
+  end
+end
+
+Then(/^I can use the form to call the target$/) do
+  fill_in "Phone Number", :with => "4155555555"
+
+  click_call_button
+
+  click_the_try_again_button
+  expect(page.has_content? "important call").to be_truthy
+
+  expect(first(:input, "#inputPhone")).to be_truthy
+end
+
+def click_call_button
+  # TODO:  stub the ToolsController#Call method
+  RSpec::Mocks.with_temporary_scope do
+    stub_query_call_initiation
+    click_button "Call Now"
+    expect(page.has_content? "Calling you now").to be_truthy
+  end
+end
+
+def click_the_try_again_button
+  click_link "click here"
+end
+
+When(/^I go down the try again path of the call form$/) do
+  fill_in "Phone Number", :with => "4155555555"
+  click_call_button
+end
+
+Then(/^I was shown the calling you now message$/) do
+  # This check really happens within the click_call_button method...
+end
 
 def this_machine_offline?
   return $OfflineMode unless $OfflineMode.nil?

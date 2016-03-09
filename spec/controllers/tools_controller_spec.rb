@@ -19,6 +19,7 @@ RSpec.describe ToolsController, type: :controller do
   end
 
   it "should create signatures when a user signs" do
+    stub_update_congress_scorecards
     create_signature_and_have_user_sign
 
     sig = @petition.signatures.last
@@ -36,6 +37,7 @@ RSpec.describe ToolsController, type: :controller do
     allow(SmartyStreets).to receive(:get_city_state).with("94109").and_raise("should not have wandered into SmartyStreets")
     Rails.application.secrets.smarty_streets_id = nil
 
+    stub_update_congress_scorecards
     create_signature_and_have_user_sign
     sig = @petition.signatures.last
     expect(sig.city).to eq ""
@@ -44,15 +46,31 @@ RSpec.describe ToolsController, type: :controller do
     expect(@petition.signatures.count).to eq 100
   end
 
+
+  it "should test the call tool requests" do
+    stub_query_call_initiation
+
+    @call_campaign = FactoryGirl.create(:call_campaign)
+    @action = @call_campaign.action_page
+
+    call_params = {
+      action_id: @action.id,
+      call_campaign_id: @call_campaign.call_campaign_id,
+      location: "null",
+      phone: 415_555_5555,
+      update_user_data: "undefined",
+      zipcode: 94109
+    }
+
+    post :call, call_params
+
+    expect(response.code).to eq "200"
+  end
+
 end
 
+# refactor, does more than stub...
 def create_signature_and_have_user_sign
   @petition = FactoryGirl.create(:petition_with_99_signatures_needing_1_more)
-  allow_any_instance_of(ToolsController).to receive(:update_congress_scorecards).and_return(nil)
   post :petition, signature: valid_attributes[:signature].merge({ "petition_id" => @petition.id.to_s })
-end
-
-def stub_smarty_streets
-  stub_resp = {"city"=>"San Francisco", "state_abbreviation"=>"CA", "state"=>"California", "mailable_city"=>true}
-  allow(SmartyStreets).to receive(:get_city_state).with("94109").and_return(stub_resp)
 end

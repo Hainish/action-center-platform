@@ -9,55 +9,35 @@ class ToolsController < ApplicationController
   skip_after_filter :deliver_thanks_message, if: :signature_has_errors
   skip_before_filter :verify_authenticity_token, only: :petition
 
+  # GET /tools/call_required_fields
+  #
+  # The javascript hits this endpoint for call campaigns to figure out what
+  # number to dial.
   def call_required_fields
-    response = RestClient.get Rails.application.config.call_tool_url +
-      '/api/campaign/' + params[:call_campaign_id] +
-      '?api_key=' + Rails.application.secrets.call_tool_api_key
-    render :json => JSON.parse(response.body)["required_fields"]
+    response = CallCampaign.query_required_fields(params["call_campaign_id"])
+    render :json => response
   end
 
+  # POST /tools/call
+  #
+  # This endpoint is hit by the javascript when the user clicks the "call"
+  # button.  Twilio should hook them up with a call shortly after.
   def call
     ahoy.track "Action",
       { type: "action", actionType: "call", actionPageId: params[:action_id] },
       action_page: @action_page
 
-    @name = current_user.try :name
-
     if params[:update_user_data] == "yes"
       update_user_data(call_params.with_indifferent_access)
     end
 
-    begin
-      response = RestClient.get Rails.application.config.call_tool_url + '/call/create',
-        params: { campaignId: params[:call_campaign_id],
-                  userPhone:  params[:phone],
-                  userCountry: 'US',
-                  userLocation: params[:location],
-                  # TODO - Settle on the schema of the private meta data
-                  meta: {
-                    user_id:     @user.try(:id),
-                    action_id:   params[:action_id],
-                    action_type: 'call'
-                  }.to_json,
-                  callback_url: root_url }
-    rescue RestClient::BadRequest => e
-      begin
-        error = JSON.parse(e.http_body)["error"]
-      rescue
-        raise e
-      end
-      # Don't raise for twilio error 13224: number invalid
-      unless error.match(/^13224:/)
-        if Rails.application.secrets.sentry_dsn.nil?
-          raise error
-        else
-          Raven.capture_message(error, { :level => 'info' })
-        end
-      end
-    end
+    @call_campaign = @action_page.call_campaign
+    @call_campaign.initiate_call(params)
 
     render :json => {}, :status => 200
   end
+
+
 
   # GET /tools/social_buttons_count
   def social_buttons_count
@@ -250,6 +230,7 @@ class ToolsController < ApplicationController
   end
 
   private
+
   def set_user
     @user = current_user
   end

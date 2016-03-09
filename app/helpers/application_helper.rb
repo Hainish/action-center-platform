@@ -407,6 +407,7 @@ module ApplicationHelper
     url
   end
 
+  
   def update_user_data(params={})
     params = params.with_indifferent_access.slice(*user_session_data_whitelist)
     if user_signed_in?

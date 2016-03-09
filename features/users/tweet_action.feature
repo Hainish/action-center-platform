@@ -10,3 +10,4 @@ Feature: Do a Tweet Action
     Then I see a button to lookup my reps
     When I fill in my tweet petition location info
       And I click the button to lookup my reps
+    Then I see my reps
